@@ -1,14 +1,30 @@
 import tkinter as tk
 import random
-import time
+import copy
 from PIL import Image, ImageTk
 from itertools import count
 
 CELL_SIZE = 50
 GRID_SIZE = 6
 
+dev = True
+
 def convertDice(dice):
     return (["A", "B", "C", "D", "E", "F"].index(dice[0]), (int(dice[1]) - 1))
+
+class Pile:
+    def __init__(self):
+        self.__stack__ = []
+
+    def empiler(self, i):
+        self.__stack__.append(i)
+
+    def depiler(self):
+        if self.taille() == 0: return
+        return self.__stack__.pop()
+
+    def taille(self):
+        return len(self.__stack__)
 
 # Données des dés
 dice_values = [
@@ -91,6 +107,8 @@ class PuzzlePiece:
         self.shape = shape
         self.x = x
         self.y = y
+        self.original_x = copy.copy(x)
+        self.original_y = copy.copy(y)
         self.rotation = 0
         self.mirrored = False
         self.rects = []
@@ -132,6 +150,7 @@ class PuzzlePiece:
             self.canvas.tag_bind(rect, "<ButtonRelease-1>", self.snap_to_grid)
 
     def on_double_right_click(self, event):
+        if self.geniusSquare.blockers == []: return
         if not self.movable: return
         if self.isOnGrid: return
         self.rotation -= 1
@@ -139,12 +158,14 @@ class PuzzlePiece:
         self.redraw()
 
     def on_right_click(self, event):
+        if self.geniusSquare.blockers == []: return
         if not self.movable: return
         if self.isOnGrid: return
         self.rotation += 1
         self.redraw()
 
     def do_drag(self, event):
+        if self.geniusSquare.blockers == []: return
         if not self.movable: return
         dx = event.x - self.x
         dy = event.y - self.y
@@ -155,7 +176,10 @@ class PuzzlePiece:
         if (False in [block.isOnGrid for block in self.geniusSquare.pieces]):
             self.geniusSquare.hideSuccess()
 
+        print((self.original_x, self.original_y))
+
     def snap_to_grid(self, event):
+        if self.geniusSquare.blockers == []: return
         if not self.movable: return
         grid_origin_x = 300 + (self.geniusSquare.margin["left"] if "left" in self.geniusSquare.margin else ((-self.geniusSquare.margin["right"]) if "right" in self.geniusSquare.margin else 0))
         grid_origin_y = 0 + (self.geniusSquare.margin["top"] if "top" in self.geniusSquare.margin else ((-self.geniusSquare.margin["bottom"]) if "bottom" in self.geniusSquare.margin else 0))
@@ -164,17 +188,25 @@ class PuzzlePiece:
         
         if (grid_x, grid_y) in self.geniusSquare.blockers_coords:
             self.isOnGrid = False
+            self.x = self.original_x
+            self.y = self.original_y
+            self.redraw()
             return
         
         if (False in [block.isOnGrid for block in self.geniusSquare.pieces]):
             self.geniusSquare.hideSuccess()
         
         if 0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE:
+            print(self.geniusSquare.blockers_coords)
+            print((grid_x, grid_y))
             self.x = grid_origin_x + grid_x * CELL_SIZE
             self.y = grid_origin_y + grid_y * CELL_SIZE
             self.redraw()
             self.isOnGrid = True
         else:
+            self.x = self.original_x
+            self.y = self.original_y
+            self.redraw()
             self.isOnGrid = False
             
         if (False in [block.isOnGrid for block in self.geniusSquare.pieces]):
@@ -210,7 +242,7 @@ class GeniusSquare:
         self.pieces = []
         self.create_all_pieces()
 
-        self.success_ = ImageLabel(self.root)
+        self.success_ = ImageLabel(self.root, padx=10, pady=10)
         self.success_.pack()
         self.success_.load('success.gif')
         self.hideSuccess()
@@ -253,6 +285,8 @@ class GeniusSquare:
             self.blockers.append(blocker)
             self.blockers_coords.append(convertDice(coord))
             self.blockers_coords_xy.append((x1, y1, x2, y2))
+            if dev:
+                print(f"Ajout d'une contrainte en x={convertDice(coord)[0]};y={convertDice(coord)[1]} (en {coord}).")
 
     def place_buttons(self):
         tk.Label(self.sidebar, text="Genius Square").pack(pady=10)
@@ -265,6 +299,13 @@ class GeniusSquare:
 
         btn3 = tk.Button(self.sidebar, text="Réinitialiser", command=self.reset)
         btn3.pack(pady=5)
+
+        if dev:
+            debugbtn = tk.Button(self.sidebar, text="DEBUG", command=self.debug)
+            debugbtn.pack(pady=5)
+
+    def debug(self):
+        print("Debug")
 
     def reset(self):
         self.canvas.delete("all")
